@@ -93,7 +93,7 @@ marketing copy, decorative anything.
 
 ```
 swift build && swift test
-./Scripts/make-app.sh          # produces a launchable SLUJ.app
+./scripts/make-app.sh          # produces a launchable SLUJ.app
 ```
 
 ## Do not add without clear product justification

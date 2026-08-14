@@ -301,7 +301,7 @@ cleanup. SLUJ is not a disk cleaner.
 The existing classification work serves this: material is distinguished as
 authored work versus material that can be rebuilt, so "428 MB" resolves into
 "15 MB you wrote and 311 MB `npm` can regenerate." See
-[README](README.md#classification-model) for the current model, and
+[README](../README.md#classification-model) for the current model, and
 [Current scope](#current-scope) for what is actually implemented.
 
 ## Agent context and capture
@@ -386,7 +386,7 @@ SLUJ is not:
 
 It surfaces information from several of those domains without becoming any one
 of them. It is also not a disk cleaner, a file manager, or a deletion tool — see
-the read-only guarantee in [README](README.md#safety).
+the read-only guarantee in [README](../README.md#safety).
 
 ## Current scope
 

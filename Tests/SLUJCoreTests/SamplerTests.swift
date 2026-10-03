@@ -59,6 +59,8 @@ private func snapshot(_ pid: Int32 = 1, start: Double = 0, cpu: UInt64 = 0, memo
 @Test func formatting() {
     #expect(Format.bytes(184 * 1_048_576) == "184 MB")
     #expect(Format.bytes(1536 * 1_048_576) == "1.5 GB")
+    #expect(Format.percent(0.42) == "0.4%")
+    #expect(Format.percent(37.6) == "38%")
     #expect(Format.watts(0.047) == "47 mW")
     #expect(Format.watts(1.5) == "1.50 W")
     #expect(Format.watts(12.34) == "12.3 W")

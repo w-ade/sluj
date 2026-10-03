@@ -6,7 +6,6 @@ import SLUJCore
 /// starred by hand, come first.
 struct PickerView: View {
     let monitor: Monitor
-    @Binding var pinned: Bool
     /// Newline-separated app keys (see `key(for:)`).
     @AppStorage("starredApps") private var starredStorage = ""
     @State private var apps: [NSRunningApplication] = []
@@ -17,23 +16,21 @@ struct PickerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Pick an app to watch").font(.slujTitle)
+            HStack(spacing: 8) {
+                Text("Pick an app to watch")
+                    .font(.inter(16))
+                    .foregroundStyle(Theme.muted)
                 Spacer()
-                PinButton(pinned: $pinned)
+                if let quit = monitor.lastQuit {
+                    Text("\(quit) quit")
+                        .font(.inter(12))
+                        .foregroundStyle(Theme.muted)
+                }
             }
-            .padding(.horizontal, Dimensions.padding)
-            .frame(height: 40)
+            .frame(height: Dimensions.headerHeight)
 
-            if let quit = monitor.lastQuit {
-                Text("\(quit) quit.")
-                    .font(.slujSmall)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, Dimensions.padding)
-                    .padding(.bottom, 8)
-            }
-
-            Divider()
+            Spacer().frame(height: 8)
+            Rectangle().fill(Theme.border).frame(height: 1)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -41,8 +38,9 @@ struct PickerView: View {
                     section("Mine", mine, empty: "Apps built in ~/Developer show up here. Star any other app to add it.")
                     section("Everything else", others, empty: nil)
                 }
-                .padding(.vertical, 6)
+                .padding(.bottom, 4)
             }
+            .scrollIndicators(.never)
         }
         .onAppear(perform: reload)
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didLaunchApplicationNotification)) { _ in reload() }
@@ -51,17 +49,15 @@ struct PickerView: View {
 
     @ViewBuilder
     private func section(_ title: String, _ apps: [NSRunningApplication], empty: String?) -> some View {
-        Text(title.uppercased())
-            .font(.slujSectionLabel)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, Dimensions.padding)
-            .padding(.top, 10)
+        Text(title)
+            .font(.inter(12))
+            .foregroundStyle(Theme.muted)
+            .padding(.top, 12)
             .padding(.bottom, 4)
         if apps.isEmpty, let empty {
             Text(empty)
-                .font(.slujSmall)
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, Dimensions.padding)
+                .font(.inter(12))
+                .foregroundStyle(Theme.icon)
                 .padding(.bottom, 4)
         }
         ForEach(apps, id: \.processIdentifier) { app in
@@ -114,19 +110,21 @@ private struct AppRow: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             if let icon = app.icon {
                 Image(nsImage: icon).resizable().frame(width: 16, height: 16)
             }
             Text(app.localizedName ?? "Unknown")
-                .font(.slujBody)
+                .font(.inter(14))
+                .foregroundStyle(Theme.ink)
                 .lineLimit(1)
             Spacer()
             star
         }
-        .padding(.horizontal, Dimensions.padding)
-        .frame(height: 26)
-        .background(hovering ? Color.primary.opacity(0.06) : .clear)
+        .padding(.horizontal, 8)
+        .frame(height: 30)
+        .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Theme.hover : .clear))
+        .padding(.horizontal, -8)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
         .onHover { hovering = $0 }
@@ -136,12 +134,14 @@ private struct AppRow: View {
     private var star: some View {
         if isDeveloperApp {
             Image(systemName: "star.fill")
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.icon)
                 .help("Built in ~/Developer")
         } else {
             Button(action: onToggleStar) {
                 Image(systemName: isStarred ? "star.fill" : "star")
-                    .foregroundStyle(isStarred ? .primary : .tertiary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(isStarred ? Theme.ink : Theme.icon)
                     .opacity(isStarred || hovering ? 1 : 0)
             }
             .buttonStyle(.plain)

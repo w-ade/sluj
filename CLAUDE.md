@@ -7,8 +7,8 @@ What exists today (v0.2) is much smaller:
 
 > A tiny native Mac window that watches one running app.
 
-Pick an app, see its CPU, memory, energy and GPU, with a green / yellow / red
-status and a per-process breakdown. Built for checking that your own apps
+Pick an app, see its CPU, memory, energy or GPU as a total, a status, and one
+bar per process. Built for checking that your own apps
 (Tauri, SwiftUI, Electron) run smoothly and aren't too heavy for the machine.
 
 The v0.1 storage-scanner wireframe is archived at the tag
@@ -16,8 +16,21 @@ The v0.1 storage-scanner wireframe is archived at the tag
 
 ## Decisions (from the 2026-10-03 planning session)
 
-- One fixed **280 × 385** window, Dock icon, no menu bar extra. Pin button
+- The UI is the SLJ-AE5XA Figma frame (`docs/design/`): the whole window is
+  the card, fixed **500 × 313**, Dock icon, no menu bar extra. The title reads
+  "sluj"; clicking it goes back to the app picker. A metric menu switches
+  between CPU / Memory / Energy / GPU (`@AppStorage("metric")`). Pin button
   floats it (`NSWindow.level = .floating`). Closing the window quits.
+- The real traffic lights sit at the 24 pt content inset: `WindowObserver`
+  stretches the titlebar container and moves the buttons. Never set
+  `window.backgroundColor`: on macOS 26 it hides the traffic lights.
+  SwiftUI adds a 28 pt titlebar inset when sizing the window, so the scene
+  frame is `windowHeight - titlebarInset`.
+- Inter (OFL, `Resources/Fonts/`) is bundled by `make-app.sh` and registered
+  with `ATSApplicationFontsPath`. Its name is `InterVariable`, not "Inter".
+  `swift run` has no bundle and falls back to the system font.
+- Light and dark follow the system (`Theme` in `DesignTokens.swift`).
+  `--appearance dark` and `--watch <app>` force them for screenshots.
 - Picker: apps whose executable is inside `~/Developer` are listed under
   "Mine" automatically; a star adds any other app (persisted in
   `@AppStorage("starredApps")`).
@@ -52,8 +65,8 @@ SLUJ watches; it never touches. Nothing in this codebase may:
 - write into a user's projects or modify user files
 - request admin rights, install a privileged helper, or ask for Full Disk Access
 
-The only thing SLUJ stores is its own preferences (pin, starred apps,
-breakdown open/closed) in `UserDefaults`.
+The only thing SLUJ stores is its own preferences (pin, starred apps, chosen
+metric) in `UserDefaults`.
 
 ## Grouping rules (`AppGroup`)
 
@@ -96,17 +109,18 @@ detached task; a full snapshot takes about 5 ms.
 
 ## UI principles
 
-One small window that reads as a native developer utility. Colour carries
+One small card that reads as a native developer utility. Colour carries
 meaning only, from the palette in `DesignTokens.swift`:
 
 | Use | Colour |
 | --- | --- |
 | fine / warm / too heavy | `#20C76A` / `#FFD84A` / `#F04452` |
-| CPU / memory / energy / GPU | `#4B73FF` / `#8B5CF6` / `#2EC5E8` / `#E94BFF` |
+| process bars, in order | `#4B73FF` `#2EC5E8` `#8B5CF6` `#E94BFF` `#FF9F1A` `#FFD84A` `#20C76A` `#F04452` |
 | recording (roadmap) | `#FF9F1A` |
 
-Everything else is system monochrome. Rows keep a stable order (main process
-first, then by name) so nothing jumps every second. Avoid: hero type, card
+Each process gets its bar colour once, largest memory first, and keeps it
+across metrics. Neutrals are `#737373` / `#E5E5E5` / black on white, and
+`#A1A1A1` / `#262626` / `#FAFAFA` on `#171717` in dark mode. Avoid: hero type, card
 grids, gradients, glassmorphism, marketing copy, decorative anything.
 
 ## Build

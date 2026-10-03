@@ -7,6 +7,9 @@ struct ProcessRow: Identifiable {
     let name: String
     let isMain: Bool
     let reading: Reading
+    /// Index into `Palette.series`. Fixed per process for as long as it's
+    /// watched, so a process keeps its colour across metrics and re-sorts.
+    let colorSlot: Int
 }
 
 enum Paths {
@@ -33,12 +36,14 @@ final class Monitor {
     @ObservationIgnored private var sampler = Sampler()
     @ObservationIgnored private var tracker = StatusTracker()
     @ObservationIgnored private var names: [String: String] = [:]
+    @ObservationIgnored private var colorSlots: [String: Int] = [:]
     @ObservationIgnored private var loop: Task<Void, Never>?
 
     func watch(_ app: NSRunningApplication) {
         target = app
         lastQuit = nil
         names = [:]
+        colorSlots = [:]
         restart()
     }
 
@@ -96,15 +101,36 @@ final class Monitor {
         let readings = sampler.sample(table, members: members, at: time)
         total = readings.reduce(.zero) { $0 + $1.reading }
         status = tracker.update(total, at: time)
+        assignColors(to: readings)
         processes = readings
-            .map { ProcessRow(id: $0.id, name: name(for: $0.snapshot, app: app), isMain: $0.id == pid, reading: $0.reading) }
+            .map {
+                ProcessRow(
+                    id: $0.id, name: name(for: $0.snapshot, app: app), isMain: $0.id == pid,
+                    reading: $0.reading, colorSlot: colorSlots[key(for: $0.snapshot)] ?? 0
+                )
+            }
             // A stable order, so rows don't jump around every second.
             .sorted { ($0.isMain ? 0 : 1, $0.name, $0.id) < ($1.isMain ? 0 : 1, $1.name, $1.id) }
     }
 
+    /// New processes take the next free colours, largest memory first, so the
+    /// first sample reads like the design: biggest process in the first colour.
+    private func assignColors(to readings: [ProcessReading]) {
+        let unseen = readings
+            .filter { colorSlots[key(for: $0.snapshot)] == nil }
+            .sorted { $0.reading.memoryBytes > $1.reading.memoryBytes }
+        for reading in unseen {
+            colorSlots[key(for: reading.snapshot)] = colorSlots.count
+        }
+    }
+
+    private func key(for process: ProcessSnapshot) -> String {
+        "\(process.pid)-\(process.startTime)"
+    }
+
     private func name(for process: ProcessSnapshot, app: NSRunningApplication) -> String {
         if process.pid == app.processIdentifier { return app.localizedName ?? process.name }
-        let key = "\(process.pid)-\(process.startTime)"
+        let key = key(for: process)
         if let cached = names[key] { return cached }
         let arguments = ProcessName.needsArguments(process.name) ? ProcessTable.arguments(of: process.pid) : []
         let name = ProcessName.display(name: process.name, arguments: arguments)

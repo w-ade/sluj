@@ -9,8 +9,12 @@ struct SLUJApp: App {
     var body: some Scene {
         Window("SLUJ", id: "main") {
             MainView(monitor: monitor)
-                .frame(width: Dimensions.windowWidth, height: Dimensions.windowHeight)
+                // SwiftUI adds the hidden titlebar's inset on top of this when it
+                // sizes the window; MainView then runs under the titlebar, so
+                // the window comes out exactly card-sized.
+                .frame(width: Dimensions.windowWidth, height: Dimensions.windowHeight - Dimensions.titlebarInset)
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {}

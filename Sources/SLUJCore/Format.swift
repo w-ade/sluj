@@ -8,8 +8,9 @@ public enum Format {
         return String(format: "%.1f GB", megabytes / 1024)
     }
 
+    /// One decimal under 10%, like Activity Monitor, so light work isn't all "0%".
     public static func percent(_ value: Double) -> String {
-        String(format: "%.0f%%", value)
+        String(format: value < 10 ? "%.1f%%" : "%.0f%%", value)
     }
 
     /// Light apps draw tens of milliwatts, so small values read in mW.

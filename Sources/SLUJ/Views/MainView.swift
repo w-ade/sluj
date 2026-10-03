@@ -114,6 +114,15 @@ struct WindowObserver: NSViewRepresentable {
             occlusionChanged()
         }
 
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            // Changing the theme makes AppKit rebuild the titlebar controls.
+            // Reapply their content-grid position after that relayout.
+            DispatchQueue.main.async { [weak self] in
+                self?.placeTrafficLights()
+            }
+        }
+
         @objc private func occlusionChanged() {
             onVisibilityChange?(window?.occlusionState.contains(.visible) ?? false)
         }

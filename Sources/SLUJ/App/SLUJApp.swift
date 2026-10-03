@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// created leaves its content view sized against the old titlebar metrics,
     /// which clips the bottom of the layout.
     func applicationWillFinishLaunching(_ notification: Notification) {
+        AppAppearance.restore()
         NSApp.setActivationPolicy(.regular)
     }
 

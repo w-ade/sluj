@@ -9,8 +9,9 @@ struct MainView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Dimensions.sectionGap) {
-            HStack {
+            HStack(spacing: 8) {
                 Spacer()
+                ThemeToggle()
                 PinButton(pinned: $pinned)
             }
             .frame(height: Dimensions.lightsRow)
@@ -34,9 +35,6 @@ struct MainView: View {
     /// screenshots.
     private func watchFromArguments() {
         let arguments = ProcessInfo.processInfo.arguments
-        if let index = arguments.firstIndex(of: "--appearance"), index + 1 < arguments.count {
-            NSApp.appearance = NSAppearance(named: arguments[index + 1] == "dark" ? .darkAqua : .aqua)
-        }
         guard monitor.target == nil,
               let index = arguments.firstIndex(of: "--watch"), index + 1 < arguments.count,
               let app = NSWorkspace.shared.runningApplications.first(where: {

@@ -33,7 +33,7 @@ enum Metric: String, CaseIterable, Identifiable {
     func blurb(for app: String) -> String {
         switch self {
         case .memory:
-            "Memory used by each process \(app) runs, including its helpers and the dev server that launched it. The widest bar is where most of it goes. Check it after a change to see if the app got heavier."
+            "Memory used by each process \(app) runs, including its helpers and the dev server that launched it. The tallest column is where most of it goes. Check it after a change to see if the app got heavier."
         case .cpu:
             "CPU used by each process \(app) runs over the last second, including its helpers and the dev server that launched it. 100% is one full core, so a busy app can pass 100%."
         case .energy:
@@ -44,22 +44,25 @@ enum Metric: String, CaseIterable, Identifiable {
     }
 }
 
-/// The watched app as a card: name and metric, the total, the largest and
-/// smallest process, one bar per process, and what the bars mean.
+/// The watched app as a card with a labeled column for every process.
 struct MonitorView: View {
     let monitor: Monitor
     let app: NSRunningApplication
     @AppStorage("metric") private var metric: Metric = .memory
     @State private var hoveringTitle = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var appName: String { app.localizedName ?? "App" }
     private var showsValues: Bool { !metric.isRate || monitor.hasRates }
 
-    /// Processes doing any of this metric's work, largest first.
+    /// Keep idle processes visible too. Stable tie-breaking avoids jitter
+    /// when several helpers have the same (often zero) rate.
     private var ranked: [ProcessRow] {
         monitor.processes
-            .filter { metric.value($0.reading) > 0 }
-            .sorted { metric.value($0.reading) > metric.value($1.reading) }
+            .sorted {
+                let lhs = metric.value($0.reading), rhs = metric.value($1.reading)
+                return lhs == rhs ? $0.id < $1.id : lhs > rhs
+            }
     }
 
     var body: some View {
@@ -67,18 +70,17 @@ struct MonitorView: View {
             header
             stat
             Spacer().frame(height: Dimensions.sectionGap)
-            range
-            Spacer().frame(height: 8)
-            BarStrip(segments: segments)
-                .frame(height: Dimensions.barHeight)
+            ProcessChart(segments: segments, emptyMessage: showsValues ? "No processes to display" : "Measuring…")
             Spacer().frame(height: Dimensions.sectionGap)
             Rectangle().fill(Theme.border).frame(height: 1)
             Spacer().frame(height: Dimensions.sectionGap)
             Text(metric.blurb(for: appName))
                 .font(.inter(12))
-                .lineSpacing(1.5)
-                .foregroundStyle(Theme.muted)
+                .lineSpacing(2)
+                .foregroundStyle(Theme.description)
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
+                .help(metric.blurb(for: appName))
         }
     }
 
@@ -99,7 +101,7 @@ struct MonitorView: View {
             Image(systemName: "info.circle.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.icon)
-                .help("Warm: CPU over 30% for 10s, or memory over 1 GB.\nToo heavy: CPU over 80% for 10s, or memory over 3 GB.")
+                .help("Busy: CPU over 30% for 10s, or memory over 1 GB.\nHeavy: CPU over 80% for 10s, or memory over 3 GB.")
 
             Spacer()
             MetricMenu(metric: $metric)
@@ -113,6 +115,8 @@ struct MonitorView: View {
                 .font(.inter(30))
                 .monospacedDigit()
                 .foregroundStyle(Theme.ink)
+                .contentTransition(.numericText(value: metric.value(monitor.total)))
+                .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: metric.value(monitor.total))
             HStack(spacing: 0) {
                 Text(monitor.status.label).foregroundStyle(monitor.status.color)
                 Text(" · \(monitor.processes.count) \(monitor.processes.count == 1 ? "process" : "processes")")
@@ -123,75 +127,111 @@ struct MonitorView: View {
         .frame(height: Dimensions.statHeight)
     }
 
-    private var range: some View {
-        HStack {
-            if showsValues, let largest = ranked.first, let smallest = ranked.last {
-                Text("\(largest.name) · \(metric.format(metric.value(largest.reading)))")
-                Spacer()
-                if ranked.count > 1 {
-                    Text("\(smallest.name) · \(metric.format(metric.value(smallest.reading)))")
-                }
-            } else {
-                Text(showsValues ? "No \(metric.rawValue) use right now" : "Measuring…")
-                Spacer()
-            }
-        }
-        .font(.inter(14))
-        .foregroundStyle(Theme.muted)
-        .lineLimit(1)
-        .frame(height: Dimensions.rangeHeight)
-    }
-
-    private var segments: [BarStrip.Segment] {
+    private var segments: [ProcessChart.Segment] {
         guard showsValues else { return [] }
         return ranked.map { process in
             let value = metric.value(process.reading)
-            return BarStrip.Segment(
+            return ProcessChart.Segment(
                 id: process.id,
                 value: value,
                 color: Palette.series(process.colorSlot),
-                label: "\(process.name) · \(metric.format(value))"
+                name: process.name,
+                formattedValue: metric.format(value)
             )
         }
     }
 }
 
-/// One rounded bar per process, widths proportional to value, every bar at
-/// least a few points wide so the smallest processes stay visible.
-struct BarStrip: View {
+/// Equal-width columns, normalized to the largest process. Eight fit the
+/// design at full size; larger process groups scroll without hiding data.
+struct ProcessChart: View {
     struct Segment: Identifiable, Equatable {
         let id: Int32
         let value: Double
         let color: Color
-        let label: String
+        let name: String
+        let formattedValue: String
+
+        var displayName: String {
+            if name == "Networking" { return "Network" }
+            for suffix in [" (node)", " (bun)", " (deno)"] where name.hasSuffix(suffix) {
+                return String(name.dropLast(suffix.count))
+            }
+            return name
+        }
+
+        var accessibilityLabel: String { "\(name) · \(formattedValue)" }
     }
 
     let segments: [Segment]
-    private let minimumWidth: CGFloat = 3
+    let emptyMessage: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geometry in
             if segments.isEmpty {
-                RoundedRectangle(cornerRadius: Dimensions.barRadius).fill(Theme.border)
+                Text(emptyMessage)
+                    .font(.inter(12))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let widths = widths(in: geometry.size.width)
-                HStack(spacing: Dimensions.barGap) {
-                    ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                        RoundedRectangle(cornerRadius: Dimensions.barRadius)
-                            .fill(segment.color)
-                            .frame(width: widths[index])
-                            .help(segment.label)
+                let visibleCount = min(8, segments.count)
+                let width = max(1, (geometry.size.width - Dimensions.barGap * CGFloat(visibleCount - 1)) / CGFloat(visibleCount))
+                let maximum = segments.map(\.value).max() ?? 0
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: Dimensions.barGap) {
+                        ForEach(segments) { segment in
+                            column(segment, width: width, maximum: maximum)
+                                .transition(.opacity)
+                        }
                     }
+                    .background(alignment: .top) {
+                        Rectangle().fill(Theme.border)
+                            .frame(height: 1)
+                            .offset(y: Dimensions.plotHeight)
+                    }
+                    .animation(reduceMotion ? nil : .smooth(duration: 0.4), value: segments)
                 }
+                .scrollIndicators(.hidden)
             }
         }
-        .animation(.easeOut(duration: 0.4), value: segments)
+        .frame(height: Dimensions.chartHeight)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Usage by process")
     }
 
-    private func widths(in available: CGFloat) -> [CGFloat] {
-        let room = available - Dimensions.barGap * CGFloat(segments.count - 1) - minimumWidth * CGFloat(segments.count)
-        let total = segments.reduce(0) { $0 + $1.value }
-        return segments.map { minimumWidth + max(0, room) * CGFloat($0.value / total) }
+    private func column(_ segment: Segment, width: CGFloat, maximum: Double) -> some View {
+        let height = maximum > 0 ? max(2, Dimensions.barHeight * CGFloat(segment.value / maximum)) : 2
+        return VStack(spacing: 0) {
+            VStack(spacing: 6) {
+                Text(segment.formattedValue)
+                    .font(.inter(11))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(height: 14)
+                    .transaction { $0.animation = nil }
+                UnevenRoundedRectangle(topLeadingRadius: Dimensions.barRadius, topTrailingRadius: Dimensions.barRadius)
+                    .fill(segment.color)
+                    .frame(height: height)
+            }
+            .frame(height: Dimensions.plotHeight, alignment: .bottom)
+            Color.clear.frame(height: 1)
+            Text(segment.displayName)
+                .font(.inter(11))
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .lineSpacing(1)
+                .frame(width: width)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+                .frame(height: Dimensions.chartLabelHeight, alignment: .top)
+        }
+        .frame(width: width)
+        .help(segment.accessibilityLabel)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(segment.accessibilityLabel)
     }
 }
 

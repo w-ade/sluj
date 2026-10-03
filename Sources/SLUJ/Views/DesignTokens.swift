@@ -2,13 +2,13 @@ import AppKit
 import SwiftUI
 import SLUJCore
 
-/// Sizes from the SLJ-AE5XA Figma frame (docs/design/SLJ-AE5XA.png).
+/// Sizes from the current SLJ-20261003-002 light/dark Figma cards.
 enum Dimensions {
     static let windowWidth: CGFloat = 500
-    static let windowHeight: CGFloat = 313
+    static let windowHeight: CGFloat = 396
     /// Height SwiftUI reserves for a hidden titlebar (macOS 26).
     static let titlebarInset: CGFloat = 28
-    static let padding: CGFloat = 24
+    static let padding: CGFloat = 25 // 24 pt inset + the Figma card's 1 pt border
     /// The traffic lights' row: 12 pt circles, 8 pt apart.
     static let lightsRow: CGFloat = 12
     static let lightSize: CGFloat = 12
@@ -16,9 +16,11 @@ enum Dimensions {
     static let sectionGap: CGFloat = 16
     static let headerHeight: CGFloat = 32
     static let statHeight: CGFloat = 36
-    static let rangeHeight: CGFloat = 20
-    static let barHeight: CGFloat = 42
-    static let barGap: CGFloat = 4
+    static let plotHeight: CGFloat = 116
+    static let barHeight: CGFloat = 96
+    static let chartLabelHeight: CGFloat = 36
+    static let chartHeight: CGFloat = plotHeight + 1 + chartLabelHeight
+    static let barGap: CGFloat = 8
     static let barRadius: CGFloat = 3
 }
 
@@ -28,6 +30,7 @@ enum Theme {
     static let border = Color(light: 0xE5E5E5, dark: 0x262626)
     static let ink = Color(light: 0x000000, dark: 0xFAFAFA)
     static let muted = Color(light: 0x737373, dark: 0xA1A1A1)
+    static let description = Color(hex: 0xA1A1A1)
     static let icon = Color(light: 0xB7B7B7, dark: 0x5C5C5C)
     static let chevron = Color(light: 0xA1A1A1, dark: 0x737373)
     static let hover = Color(light: 0xF5F5F5, dark: 0x202020)
@@ -60,8 +63,8 @@ extension Status {
     var label: String {
         switch self {
         case .fine: "fine"
-        case .warm: "warm"
-        case .heavy: "too heavy"
+        case .warm: "busy"
+        case .heavy: "heavy"
         }
     }
 }

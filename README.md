@@ -1759,20 +1759,25 @@ Beauty should improve comprehension, orientation, confidence, and desire to use 
 SLUJ v0.2 is a native macOS app (Swift 6, SwiftUI, Swift Concurrency, a little
 AppKit) that monitors **one running app** at a time.
 
-- One fixed 500 × 313 card-shaped window with a Dock icon, in light or dark
+- One fixed 500 × 396 card-shaped window with a Dock icon, in light or dark
   to match the system (designs in `docs/design/`). A pin button floats it
   above other apps. Closing it quits SLUJ.
+- The half-circle beside the pin switches light/dark mode with an animated
+  half-turn and remembers the choice. It follows the system until first used
+  and respects Reduce Motion.
 - An app picker. Apps built inside `~/Developer` are listed first
   automatically; a star adds any other app to that list.
 - A menu to pick one of four numbers for the watched app: **CPU**, **memory**
   (physical footprint, as Activity Monitor shows it), **energy** (CPU energy
   in watts, from the kernel's per-process energy counter), and **GPU** (from
   the GPU driver's per-process time).
-- A status: green "fine", yellow "warm" when CPU stays over 30% for 10 seconds
-  or memory passes 1 GB, red "too heavy" when CPU stays over 80% for 10
+- A status: green "fine", yellow "busy" when CPU stays over 30% for 10 seconds
+  or memory passes 1 GB, red "heavy" when CPU stays over 80% for 10
   seconds or memory passes 3 GB.
-- One bar per process counted toward the total, sized by the chosen number,
-  with the largest and smallest named above them.
+- One vertical column per process, with its value above and name below.
+  Heights follow the chosen metric; process colors stay stable across metrics.
+  Eight columns fit across, with horizontal scrolling for larger groups.
+  Column changes animate smoothly and respect the system's Reduce Motion setting.
 - It samples once a second while the window is visible, and not at all
   otherwise.
 

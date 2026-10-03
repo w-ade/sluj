@@ -16,12 +16,12 @@ The v0.1 storage-scanner wireframe is archived at the tag
 
 ## Decisions (from the 2026-10-03 planning session)
 
-- The UI is the SLJ-AE5XA Figma frame (`docs/design/`): the whole window is
-  the card, fixed **500 × 313**, Dock icon, no menu bar extra. The title reads
+- The UI is the SLJ-20261003-002 Figma page (`docs/design/`): the whole window is
+  the card, fixed **500 × 396**, Dock icon, no menu bar extra. The title reads
   "sluj"; clicking it goes back to the app picker. A metric menu switches
   between CPU / Memory / Energy / GPU (`@AppStorage("metric")`). Pin button
   floats it (`NSWindow.level = .floating`). Closing the window quits.
-- The real traffic lights sit at the 24 pt content inset: `WindowObserver`
+- The real traffic lights sit at the 25 pt content inset (24 + 1 pt border): `WindowObserver`
   stretches the titlebar container and moves the buttons. Never set
   `window.backgroundColor`: on macOS 26 it hides the traffic lights.
   SwiftUI adds a 28 pt titlebar inset when sizing the window, so the scene
@@ -29,7 +29,9 @@ The v0.1 storage-scanner wireframe is archived at the tag
 - Inter (OFL, `Resources/Fonts/`) is bundled by `make-app.sh` and registered
   with `ATSApplicationFontsPath`. Its name is `InterVariable`, not "Inter".
   `swift run` has no bundle and falls back to the system font.
-- Light and dark follow the system (`Theme` in `DesignTokens.swift`).
+- Light and dark follow the system until the animated half-circle beside
+  the pin is clicked; its choice is persisted in `UserDefaults("theme")`.
+  The icon spins a half-turn with spring settling and respects Reduce Motion.
   `--appearance dark` and `--watch <app>` force them for screenshots.
 - Picker: apps whose executable is inside `~/Developer` are listed under
   "Mine" automatically; a star adds any other app (persisted in
@@ -65,8 +67,8 @@ SLUJ watches; it never touches. Nothing in this codebase may:
 - write into a user's projects or modify user files
 - request admin rights, install a privileged helper, or ask for Full Disk Access
 
-The only thing SLUJ stores is its own preferences (pin, starred apps, chosen
-metric) in `UserDefaults`.
+The only thing SLUJ stores is its own preferences (pin, theme, starred apps,
+chosen metric) in `UserDefaults`.
 
 ## Grouping rules (`AppGroup`)
 
@@ -114,12 +116,15 @@ meaning only, from the palette in `DesignTokens.swift`:
 
 | Use | Colour |
 | --- | --- |
-| fine / warm / too heavy | `#20C76A` / `#FFD84A` / `#F04452` |
+| fine / busy / heavy | `#20C76A` / `#FFD84A` / `#F04452` |
 | process bars, in order | `#4B73FF` `#2EC5E8` `#8B5CF6` `#E94BFF` `#FF9F1A` `#FFD84A` `#20C76A` `#F04452` |
 | recording (roadmap) | `#FF9F1A` |
 
 Each process gets its bar colour once, largest memory first, and keeps it
-across metrics. Neutrals are `#737373` / `#E5E5E5` / black on white, and
+across metrics. Equal-width columns sort by the selected metric, with values
+above and two-line process names below. Eight fit across; larger groups scroll.
+Idle processes keep a 2 pt column. Updates animate for 0.4s and respect Reduce Motion.
+Neutrals are `#737373` / `#E5E5E5` / black on white, and
 `#A1A1A1` / `#262626` / `#FAFAFA` on `#171717` in dark mode. Avoid: hero type, card
 grids, gradients, glassmorphism, marketing copy, decorative anything.
 

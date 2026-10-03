@@ -2,103 +2,122 @@
 
 ## What SLUJ is
 
-A small, read-only, visual developer-storage scanner for macOS.
+The long-term product is in `README.md` and `docs/PRODUCT_OVERVIEW.md`.
+What exists today (v0.2) is much smaller:
 
-> Separate actual work from rebuildable garbage.
+> A tiny native Mac window that watches one running app.
 
-It measures where developer storage goes, classifies it, aggregates it, and
-draws it. It is **not** a disk cleaner, a file manager, or a deletion tool.
+Pick an app, see its CPU, memory, energy and GPU, with a green / yellow / red
+status and a per-process breakdown. Built for checking that your own apps
+(Tauri, SwiftUI, Electron) run smoothly and aren't too heavy for the machine.
 
-Core loop: `SCAN → CLASSIFY → AGGREGATE → VISUALIZE → INSPECT`
+The v0.1 storage-scanner wireframe is archived at the tag
+`archive/storage-scanner`. Don't resurrect it into `main`.
 
-## v0.1 scope (current)
+## Decisions (from the 2026-10-03 planning session)
 
-This is a **functional wireframe**, not final visual design.
-
-- Real: architecture, model, invariants, treemap, filtering, inspector, tests.
-- Fixture-backed: every number in the UI comes from `Sources/SLUJ/Fixtures/FixtureReport.swift`.
-- Not implemented: the filesystem crawler. `FilesystemScanner.scan` throws
-  `ScannerError.notImplemented` on purpose. Choosing folders records the URLs
-  and shows the fixture report.
+- One fixed **280 × 385** window, Dock icon, no menu bar extra. Pin button
+  floats it (`NSWindow.level = .floating`). Closing the window quits.
+- Picker: apps whose executable is inside `~/Developer` are listed under
+  "Mine" automatically; a star adds any other app (persisted in
+  `@AppStorage("starredApps")`).
+- Numbers: CPU, memory (physical footprint), energy, GPU. Energy is CPU
+  energy only (`ri_energy_nj`), shown in mW / W. It is not Apple's unitless
+  "Energy Impact".
+- Helpers and dev tooling count toward the app (see `AppGroup`).
+- Status: yellow = CPU > 30% for 10s or memory > 1 GB; red = CPU > 80% for 10s
+  or memory > 3 GB (`Limits.standard`).
+- Samples every 1s while any part of the window is visible
+  (`NSWindow.occlusionState`), nothing otherwise.
+- Current numbers only. Recordings and the menu bar icon are in `ROADMAP.md`.
 
 ## Stack
 
-macOS 14+, Swift 6, SwiftUI, Foundation, Swift Concurrency. AppKit only where
-SwiftUI needs it (`NSOpenPanel`, activation policy).
+macOS 14+, Apple Silicon, Swift 6, SwiftUI, Swift Concurrency. AppKit only
+where SwiftUI needs it (`NSRunningApplication`, `NSWorkspace`, window level and
+occlusion, activation policy). Process data comes from libproc
+(`proc_pidinfo`, `proc_pid_rusage`), `sysctl(KERN_PROCARGS2)`, the IORegistry
+(`AGXDeviceUserClient` `AppUsage` under `IOAccelerator`) for GPU time, and the
+private `responsibility_get_pid_responsible_for_pid`, looked up with `dlsym`.
 
 **Zero third-party dependencies.** No networking, backend, auth, analytics,
-cloud, telemetry, or persistence. Do not add any.
+cloud, or telemetry. Do not add any.
 
 ## Read-only guarantee — non-negotiable
 
-SLUJ never modifies user files. Nothing in this codebase may:
+SLUJ watches; it never touches. Nothing in this codebase may:
 
-- call `removeItem` / `trashItem` / `moveItem` / `copyItem` on user paths
-- shell out to `rm`, cleanup, or prune commands
-- offer delete/trash/clean buttons in the UI
-- request Full Disk Access automatically, install a privileged helper, or
-  escalate permissions
+- quit, signal (`kill`), suspend, renice or otherwise change another process
+- offer quit / force-quit buttons
+- write into a user's projects or modify user files
+- request admin rights, install a privileged helper, or ask for Full Disk Access
 
-The contract is documented on `StorageScanner`. Keep it there if that
-protocol changes.
+The only thing SLUJ stores is its own preferences (pin, starred apps,
+breakdown open/closed) in `UserDefaults`.
 
-## Classification vocabulary
+## Grouping rules (`AppGroup`)
 
-| Term | Meaning |
-| --- | --- |
-| `KEEP` | Authored work or source-of-truth material. |
-| `REBUILDABLE` | Generated material recreatable from source/configuration. |
-| `CLEANABLE` | Known disposable developer residue, e.g. tool caches. |
-| `REVIEW` | Not enough evidence to classify safely. |
+The part most likely to be wrong, so it is tested against fixtures modelled
+on a real Tauri dev session (`Tests/SLUJCoreTests/AppGroupTests.swift`).
 
-### The REVIEW safety rule
-
-**REVIEW never counts toward reclaimable storage.** So does KEEP. This is
-enforced in `ScanEntry.init`, which clamps `reclaimableBytes` to 0 for both,
-and to at most the entry's own size. `ScanReport` derives all totals from
-entries, so the headline figure can never drift from its justification.
-Tests in `Tests/SLUJCoreTests` cover this. Do not weaken them.
-
-SLUJ prefers being uncertain over being dangerously confident.
+- **Launcher**: for an app inside a `~/Developer` project, walk up the parent
+  chain while each parent's working directory is inside the project and it
+  isn't a shell. Everything under the top launcher counts (vite, Tauri CLI).
+- **Helpers, app opened normally**: every process whose responsible pid is the
+  app.
+- **Helpers, app launched from a terminal**: macOS makes the terminal
+  responsible. Only WebKit XPC helpers are considered, and each goes to the
+  Dock app under that terminal that started most recently before it.
+- `guiApps` must contain only `.regular` (Dock) apps. `NSWorkspace` also lists
+  WebKit helpers and CLI tools; letting them in makes helpers claim
+  themselves.
 
 ## Architecture
 
 ```
 Sources/SLUJCore/       no UI, no SwiftUI import
-  Model/                ScanEntry, StorageClassification, ByteFormatting
-  Classification/       ClassificationRule + starter rule set
-  Ownership/            attributing storage to a project
-  Report/               ScanReport, grouping, totals
-  Scanner/              StorageScanner protocol + read-only contract
+  ProcessSnapshot       one process at one moment (counters)
+  ProcessTable          reads all processes; cwd and argv on demand
+  AppGroup              which processes count as the app
+  ProjectRoot           ~/Developer/<Category>/<Name> from an executable path
+  Sampler               snapshots → rates (Reading)
+  Status                Limits + StatusTracker
+  Format                display formatting, process display names
 Sources/SLUJ/           the app
-  App/ Views/ ViewModels/ Fixtures/
+  App/SLUJApp           window scene, AppDelegate (activation policy, quit on close)
+  Monitor               @Observable sampling loop for the watched app
+  Views/                MainView (+ PinButton, WindowObserver), PickerView,
+                        MonitorView (+ MetricRow), DesignTokens
 Tests/SLUJCoreTests/
 ```
 
-`SLUJCore` must not import SwiftUI. `TreemapLayout` must not import SwiftUI or
-SLUJCore — it is generic over `Identifiable` so the algorithm stays swappable.
+`SLUJCore` must not import SwiftUI. Sampling runs off the main actor in a
+detached task; a full snapshot takes about 5 ms.
 
 ## UI principles
 
-One window. It should read as a small native developer utility, not a SaaS
-dashboard. Monochrome; classification is carried by fill weight and a badge,
-not colour. REVIEW gets a dashed edge because "SLUJ doesn't know" is the one
-thing the user must not misread. Compact density, system type, monospace only
-for paths and technical metadata.
+One small window that reads as a native developer utility. Colour carries
+meaning only, from the palette in `DesignTokens.swift`:
 
-Avoid: hero type, card grids, gradients, glassmorphism, big sidebars,
-marketing copy, decorative anything.
+| Use | Colour |
+| --- | --- |
+| fine / warm / too heavy | `#20C76A` / `#FFD84A` / `#F04452` |
+| CPU / memory / energy / GPU | `#4B73FF` / `#8B5CF6` / `#2EC5E8` / `#E94BFF` |
+| recording (roadmap) | `#FF9F1A` |
+
+Everything else is system monochrome. Rows keep a stable order (main process
+first, then by name) so nothing jumps every second. Avoid: hero type, card
+grids, gradients, glassmorphism, marketing copy, decorative anything.
 
 ## Build
 
 ```
 swift build && swift test
-./scripts/make-app.sh          # produces a launchable SLUJ.app
+./scripts/make-app.sh          # launchable SLUJ.app (prints its path)
+./scripts/install.sh           # release build into /Applications
 ```
 
 ## Do not add without clear product justification
 
-Persistence, scan history, accounts, cloud sync, update systems, analytics,
-Docker/package-manager API integrations, notarization, branding work. The
-next real step is the filesystem scanner behind the existing protocol —
-nothing else.
+Anything beyond the roadmap: accounts, sync, update systems, analytics,
+notarization, process control. Roadmap items come in order.

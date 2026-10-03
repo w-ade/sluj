@@ -4,12 +4,14 @@ import SwiftUI
 @main
 struct SLUJApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @State private var monitor = Monitor()
 
     var body: some Scene {
         Window("SLUJ", id: "main") {
-            MainView()
+            MainView(monitor: monitor)
+                .frame(width: Dimensions.windowWidth, height: Dimensions.windowHeight)
         }
-        .windowResizability(.contentMinSize)
+        .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }

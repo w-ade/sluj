@@ -1,128 +1,95 @@
 import AppKit
 import SwiftUI
-import SLUJCore
 
-/// The single SLUJ window.
 struct MainView: View {
-    @State private var model = ReportViewModel()
-
-    /// `SLUJ --sample` opens straight into the fixture report, so design
-    /// iteration and screenshots don't start from the empty state.
-    private static var launchesWithSample: Bool {
-        CommandLine.arguments.contains("--sample")
-    }
+    let monitor: Monitor
+    @AppStorage("pinned") private var pinned = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            switch model.state {
-            case .empty:
-                EmptyStateView(onChooseFolders: chooseFolders, onUseSample: { model.beginScan() })
-            case .scanning:
-                ScanningView()
-            case .loaded(let report):
-                ReportView(model: model, report: report)
+        Group {
+            if let app = monitor.target {
+                MonitorView(monitor: monitor, app: app, pinned: $pinned)
+            } else {
+                PickerView(monitor: monitor, pinned: $pinned)
             }
         }
-        .frame(minWidth: 940, minHeight: 620)
-        .background(.background)
-        .task {
-            if Self.launchesWithSample, model.report == nil { model.beginScan() }
-        }
+        .background(WindowObserver(pinned: pinned) { monitor.isVisible = $0 })
+        .onAppear(perform: watchFromArguments)
     }
 
-    /// The window's own title row. SwiftUI's toolbar placements are not
-    /// dependable enough here, and this bar is part of the layout anyway.
-    private var header: some View {
-        HStack(spacing: 10) {
-            Text("SLUJ")
-                .font(.system(size: 12, weight: .semibold))
-                .tracking(1.6)
-            Spacer(minLength: 0)
-            if model.report != nil {
-                Button {
-                    model.beginScan(roots: model.chosenRoots)
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .buttonStyle(.accessoryBar)
-                .help("Reload the report")
-                .accessibilityLabel("Rescan")
-            }
-            Button("Scan…") { chooseFolders() }
-                .controlSize(.small)
-                .help("Choose folders to scan")
-        }
-        .padding(.horizontal, Metric.windowPadding)
-        .padding(.vertical, 8)
-        .frame(height: 38)
-    }
-
-    /// Asks for folders with `NSOpenPanel`. v0.1 records the selection and
-    /// shows the fixture report — nothing is read from disk.
-    private func chooseFolders() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = true
-        panel.prompt = "Scan"
-        panel.message = "Choose developer folders. SLUJ only reads sizes — it never modifies or deletes files."
-        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
-
-        guard panel.runModal() == .OK else { return }
-        model.beginScan(roots: panel.urls)
+    /// `--watch <app name>` opens straight into that app, for design
+    /// iteration and screenshots.
+    private func watchFromArguments() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard monitor.target == nil,
+              let index = arguments.firstIndex(of: "--watch"), index + 1 < arguments.count,
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.localizedName?.localizedCaseInsensitiveCompare(arguments[index + 1]) == .orderedSame
+              })
+        else { return }
+        monitor.watch(app)
     }
 }
 
-struct EmptyStateView: View {
-    let onChooseFolders: () -> Void
-    let onUseSample: () -> Void
+struct PinButton: View {
+    @Binding var pinned: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            VStack(alignment: .leading, spacing: 10) {
-                Text("SLUJ")
-                    .font(.system(size: 15, weight: .semibold))
-                    .tracking(2)
-                Text("See what your developer environment is actually carrying.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                Text("SLUJ measures developer storage and separates authored work from material that can be rebuilt. It is read-only: it never deletes, moves, or modifies anything.")
-                    .font(.slujBody)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: 400, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 10) {
-                    Button("Choose folders to scan…", action: onChooseFolders)
-                        .controlSize(.large)
-                    Button("Use sample report", action: onUseSample)
-                        .controlSize(.large)
-                        .buttonStyle(.link)
-                }
-                .padding(.top, 8)
-            }
-            .frame(maxWidth: 420, alignment: .leading)
-            Spacer()
-            Spacer()
+        Button {
+            pinned.toggle()
+        } label: {
+            Image(systemName: pinned ? "pin.fill" : "pin")
+                .foregroundStyle(pinned ? .primary : .secondary)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(Metric.windowPadding)
+        .buttonStyle(.plain)
+        .help(pinned ? "Stop floating above other apps" : "Float above other apps")
     }
 }
 
-struct ScanningView: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .controlSize(.small)
-            Text("Measuring developer storage…")
-                .font(.slujBody)
-                .foregroundStyle(.secondary)
+/// Reaches the hosting NSWindow to float it when pinned and to report
+/// whether any of it is on screen, so sampling can pause when it isn't.
+struct WindowObserver: NSViewRepresentable {
+    let pinned: Bool
+    let onVisibilityChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> ObserverView {
+        let view = ObserverView()
+        view.onVisibilityChange = onVisibilityChange
+        view.pinned = pinned
+        return view
+    }
+
+    func updateNSView(_ view: ObserverView, context: Context) {
+        view.onVisibilityChange = onVisibilityChange
+        view.pinned = pinned
+    }
+
+    final class ObserverView: NSView {
+        var onVisibilityChange: ((Bool) -> Void)?
+        var pinned = false {
+            didSet { applyLevel() }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            NotificationCenter.default.removeObserver(self)
+            guard let window else { return }
+            applyLevel()
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(occlusionChanged),
+                name: NSWindow.didChangeOcclusionStateNotification, object: window
+            )
+            occlusionChanged()
+        }
+
+        @objc private func occlusionChanged() {
+            onVisibilityChange?(window?.occlusionState.contains(.visible) ?? false)
+        }
+
+        private func applyLevel() {
+            window?.level = pinned ? .floating : .normal
+        }
     }
 }

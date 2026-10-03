@@ -2,6 +2,13 @@
 
 **Understand what you're building.**
 
+> **Now:** SLUJ is a tiny native Mac window that watches one of your running
+> apps (CPU, memory, energy, GPU) and counts everything the app really is:
+> its WebKit helpers and the dev server that launched it. It's the first
+> slice of the "What is healthy?" question below. Everything after this note
+> is where SLUJ is heading, not what it does yet. See [Current Build](#current-build)
+> and [ROADMAP.md](ROADMAP.md).
+
 SLUJ is a project understanding system for people who design, build, ship, break, abandon, revive, and maintain software.
 
 Modern software projects rarely exist in one place.
@@ -1749,92 +1756,84 @@ Beauty should improve comprehension, orientation, confidence, and desire to use 
 
 # Current Build
 
-The current SLUJ implementation is a native macOS application written in:
+SLUJ v0.2 is a native macOS app (Swift 6, SwiftUI, Swift Concurrency, a little
+AppKit) that monitors **one running app** at a time.
 
-- Swift 6
-- SwiftUI
-- Foundation
-- Swift Concurrency
-- limited AppKit where required
+- One fixed 280 × 385 window with a Dock icon. A pin button floats it above
+  other apps. Closing it quits SLUJ.
+- An app picker. Apps built inside `~/Developer` are listed first
+  automatically; a star adds any other app to that list.
+- Four numbers for the watched app: **CPU**, **memory** (physical footprint,
+  as Activity Monitor shows it), **energy** (CPU energy in watts, from the
+  kernel's per-process energy counter), and **GPU** (from the GPU driver's
+  per-process time).
+- A status dot: green, yellow when CPU stays over 30% for 10 seconds or memory
+  passes 1 GB, red when CPU stays over 80% for 10 seconds or memory passes 3 GB.
+- A breakdown of every process counted toward the totals.
+- It samples once a second while the window is visible, and not at all
+  otherwise.
 
-The current codebase includes a separated `SLUJCore` layer for project/storage logic and the native SLUJ application layer.
+SLUJ only watches. It never quits, signals, or changes another process, and
+needs no admin rights.
 
-The present UI is primarily a functional wireframe for **storage understanding**.
+## What counts as "the app"
 
-Current implemented surfaces include:
+Activity Monitor lists an app's helpers as separate rows, so a Tauri or
+WebView app looks far lighter than it is. SLUJ adds them back:
 
-- one native macOS window
-- storage statistics
-- grouping modes
-- filters
-- squarified treemap
-- item selection
-- inspector
-- storage classifications
-- confidence
-- ownership
-- reasoning
-- evidence
-- rebuild recipes
-- folder selection
+- **Helpers.** For an app opened normally, macOS credits its helpers
+  (WebKit's Web Content, Networking and GPU processes) to the app, and SLUJ
+  counts them. For an app launched from a terminal (`npm run app`), macOS
+  credits them to the terminal instead; SLUJ gives each WebKit helper to the
+  app under that terminal that started most recently before it.
+- **Dev tooling.** For an app inside `~/Developer`, SLUJ walks up from the app
+  through its launchers while they run inside the project folder (the Tauri
+  CLI, `npm run app`), stopping at the shell, and counts everything those
+  launchers started, such as the vite server.
 
-The storage model currently uses fixture-backed data.
-
-The interface works.
-
-The underlying real filesystem scanner is not yet complete.
-
-BOOT, DIG, the complete PROJECT experience, SLUJ Dashboard, GitHub intelligence, project health, work management, cross-project understanding, and SLUJ Learn are **product direction**, not completed functionality.
-
-The README and product documentation should remain explicit about that distinction.
+The archived storage scanner (v0.1) lives at the git tag
+`archive/storage-scanner`.
 
 ## Repository layout
 
 ```text
 sluj/
 ├── Sources/
-│   ├── SLUJCore/            scanning + classification model (no UI)
-│   │   ├── Model/           ScanEntry, StorageClassification, ByteFormatting
-│   │   ├── Classification/  ClassificationRule + starter rule set
-│   │   ├── Ownership/       attributing storage to a project
-│   │   ├── Report/          ScanReport, grouping, totals
-│   │   └── Scanner/         StorageScanner protocol (read-only contract)
+│   ├── SLUJCore/            the engine (no UI)
+│   │   ├── ProcessTable     reads every process: CPU, memory, energy, GPU
+│   │   ├── AppGroup         which processes count as the app
+│   │   ├── ProjectRoot      which ~/Developer project an app belongs to
+│   │   ├── Sampler          snapshots → rates
+│   │   ├── Status           limits and the status tracker
+│   │   └── Format           numbers and process names for display
 │   └── SLUJ/                the application
 │       ├── App/             SLUJApp
-│       ├── Views/           MainView, ReportView, TreemapView, InspectorView
-│       ├── ViewModels/      ReportViewModel
-│       └── Fixtures/        FixtureReport
+│       ├── Monitor          sampling loop for the watched app
+│       └── Views/           MainView, PickerView, MonitorView, DesignTokens
 ├── Tests/SLUJCoreTests/
-└── scripts/make-app.sh
+└── scripts/                 make-app.sh, install.sh
 ```
 
-`SLUJCore` never imports SwiftUI. `TreemapLayout` is generic over `Identifiable` and imports neither SwiftUI nor SLUJCore, so the layout algorithm can be replaced on its own.
-
-There are zero third-party dependencies. No backend, authentication, analytics, cloud services, or persistence.
+`SLUJCore` never imports SwiftUI. There are zero third-party dependencies, and
+no networking, backend, analytics, or cloud services.
 
 ## Build and run
 
-Requires Xcode 16+ / Swift 6 on macOS 14+.
+Requires Swift 6 on macOS 14+, Apple Silicon.
 
 ```bash
 swift build
 swift test
 
-# launchable app bundle
-./scripts/make-app.sh
-open .build/release/SLUJ.app
+./scripts/make-app.sh          # builds SLUJ.app (prints where)
+./scripts/install.sh           # release build, copied to /Applications
 ```
 
 `swift run SLUJ` also works for a quick debug launch.
 
-Pass `--sample` to open straight into the fixture report, skipping the empty state — useful for design iteration and screenshots:
-
-```bash
-open -a .build/release/SLUJ.app --args --sample
-```
-
 ## Repository documentation
 
+- **[ROADMAP.md](ROADMAP.md)** — what's next for the monitor
 - **[docs/PRODUCT_OVERVIEW.md](docs/PRODUCT_OVERVIEW.md)** — product document: problem, core idea, BOOT/DIG/PROJECT, project memory, character, scope, and direction
 - **[docs/CHARACTER.md](docs/CHARACTER.md)** — the SLUJ character: states, motion principle, and how it maps to BOOT/DIG/PROJECT
 - **[CLAUDE.md](CLAUDE.md)** — working notes and constraints for agents in this repo
@@ -1843,7 +1842,7 @@ open -a .build/release/SLUJ.app --args --sample
 
 # Current Storage Model
 
-The current implementation classifies storage into:
+The archived v0.1 scanner (`archive/storage-scanner`) classified storage into:
 
 ```text
 KEEP

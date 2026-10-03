@@ -23,7 +23,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <dict>
     <key>CFBundleName</key>            <string>SLUJ</string>
     <key>CFBundleDisplayName</key>     <string>SLUJ</string>
-    <key>CFBundleIdentifier</key>      <string>dev.sluj.SLUJ</string>
+    <key>CFBundleIdentifier</key>      <string>com.brianawade.sluj</string>
     <key>CFBundleExecutable</key>      <string>SLUJ</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
     <key>CFBundleShortVersionString</key> <string>0.1.0</string>

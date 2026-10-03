@@ -392,34 +392,29 @@ the read-only guarantee in [README](../README.md#safety).
 
 Honest accounting of the gap between this document and the code.
 
-**What exists today (v0.1):** a functional wireframe of the storage layer, as a
-single native macOS window.
+**What exists today (v0.2):** a tiny native monitor for one running app, the
+first real slice of SLUJ's "What is healthy?" question.
 
-- squarified treemap sized by real proportions, with selection
-- three grouping modes: By Project, By Type, Reclaimability
-- per-classification filtering
-- an inspector showing path, size, classification, confidence, ownership,
-  reasoning, evidence, and rebuild recipe
-- the reclaimable invariants, enforced in the model and covered by tests
-- folder selection via `NSOpenPanel`
+- one fixed window: pick an app (yours from `~/Developer` first), then see its
+  CPU, memory, energy and GPU with a green / yellow / red status
+- real numbers from the kernel and GPU driver, no fixtures
+- the app counted as a whole: WebKit helpers and the dev tooling that launched
+  it, with a per-process breakdown
+- read-only, no admin rights, samples only while visible
 
-**Fixture-backed:** every number in the UI. The report comes from
-`Sources/SLUJ/Fixtures/FixtureReport.swift`. Choosing folders records the URLs
-you picked and then shows that same fixture report.
+The v0.1 storage wireframe (treemap, classifications, inspector, all
+fixture-backed) is archived at the git tag `archive/storage-scanner`.
 
 **Not built yet:**
 
 - BOOT, DIG, and PROJECT — none of the three moments exist in the app
-- the filesystem crawler (`FilesystemScanner.scan` throws
-  `ScannerError.notImplemented` on purpose)
-- any project model beyond storage: Git state, surfaces, memory, references,
-  open loops, activity
+- the filesystem scanner and the storage view
+- any project model beyond runtime health: Git state, surfaces, memory,
+  references, open loops, activity
 - any automatic capture, agent-context ingestion, or persistence
 - the SLUJ character and its states
 
-The immediate technical step is unchanged: implement the real scanner behind the
-existing `StorageScanner` protocol. Local truth first — a project view built on
-fixtures cannot tell you anything you did not already know.
+The monitor's own next steps live in [ROADMAP.md](../ROADMAP.md).
 
 ## Future direction
 

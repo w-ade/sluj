@@ -13,6 +13,7 @@ struct SLUJApp: App {
                 // allowing macOS to reserve its standard title bar.
                 .frame(width: Dimensions.windowWidth, height: Dimensions.windowHeight - Dimensions.titlebarInset)
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -34,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
+        for window in NSApp.windows {
+            window.titleVisibility = .hidden
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

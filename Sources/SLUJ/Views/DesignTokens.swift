@@ -15,6 +15,9 @@ enum Dimensions {
     static let lightSpacing: CGFloat = 8
     static let sectionGap: CGFloat = 16
     static let headerHeight: CGFloat = 32
+    /// A denser outline than the header row, so the metric label isn't
+    /// surrounded by excess vertical padding.
+    static let compactControlHeight: CGFloat = 28
     static let statHeight: CGFloat = 36
     static let plotHeight: CGFloat = 116
     static let barHeight: CGFloat = 96

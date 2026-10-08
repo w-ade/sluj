@@ -7,14 +7,12 @@ struct SLUJApp: App {
     @State private var monitor = Monitor()
 
     var body: some Scene {
-        Window("SLUJ", id: "main") {
+        Window("sluj", id: "main") {
             MainView(monitor: monitor)
-                // SwiftUI adds the hidden titlebar's inset on top of this when it
-                // sizes the window; MainView then runs under the titlebar, so
-                // the window comes out exactly card-sized.
+                // Keep the complete window at the designed card height while
+                // allowing macOS to reserve its standard title bar.
                 .frame(width: Dimensions.windowWidth, height: Dimensions.windowHeight - Dimensions.titlebarInset)
         }
-        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -36,10 +34,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
-        // The app draws its own header row, so the titlebar repeats the name.
-        for window in NSApp.windows {
-            window.titleVisibility = .hidden
-        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

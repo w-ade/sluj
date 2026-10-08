@@ -48,8 +48,10 @@ enum Metric: String, CaseIterable, Identifiable {
 struct MonitorView: View {
     let monitor: Monitor
     let app: NSRunningApplication
+    @Binding var pinned: Bool
     @AppStorage("metric") private var metric: Metric = .memory
     @State private var hoveringTitle = false
+    @State private var showsSettings = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var appName: String { app.localizedName ?? "App" }
@@ -68,6 +70,11 @@ struct MonitorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if showsSettings {
+                SettingsPanel(pinned: $pinned)
+                    .padding(.bottom, Dimensions.sectionGap)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             stat
             Spacer().frame(height: Dimensions.sectionGap)
             ProcessChart(segments: segments, emptyMessage: showsValues ? "No processes to display" : "Measuring…")
@@ -82,6 +89,7 @@ struct MonitorView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .help(metric.blurb(for: appName))
         }
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: showsSettings)
     }
 
     private var header: some View {
@@ -89,14 +97,14 @@ struct MonitorView: View {
             Button {
                 monitor.stopWatching()
             } label: {
-                Text("sluj")
+                Text(appName)
                     .font(.inter(16))
                     .foregroundStyle(hoveringTitle ? Theme.ink : Theme.muted)
                     .lineLimit(1)
             }
             .buttonStyle(.plain)
             .onHover { hoveringTitle = $0 }
-            .help("Watching \(appName). Click to watch a different app.")
+            .help("Watching \(appName). Click to choose a different app.")
 
             Image(systemName: "info.circle.fill")
                 .font(.system(size: 12))
@@ -105,6 +113,7 @@ struct MonitorView: View {
 
             Spacer()
             MetricMenu(metric: $metric)
+            SettingsButton(isPresented: $showsSettings)
         }
         .frame(height: Dimensions.headerHeight)
     }
@@ -257,7 +266,7 @@ struct MetricMenu: View {
                     .frame(width: 16, height: 16)
             }
             .padding(.horizontal, 12)
-            .frame(height: Dimensions.headerHeight)
+            .frame(height: Dimensions.compactControlHeight)
             .background(RoundedRectangle(cornerRadius: 6).fill(Theme.background))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
             .contentShape(Rectangle())
@@ -266,5 +275,84 @@ struct MetricMenu: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
+    }
+}
+
+/// Expands the app-level settings panel inside the monitor window.
+private struct SettingsButton: View {
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            SettingsGlyph()
+                .stroke(Theme.ink, style: StrokeStyle(lineWidth: 1.5, lineCap: .square, lineJoin: .round))
+                .frame(width: 16, height: 16)
+                .frame(width: 20, height: Dimensions.headerHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Settings")
+        .accessibilityLabel("Settings")
+        .accessibilityValue(isPresented ? "Expanded" : "Collapsed")
+    }
+}
+
+/// The two settings stay visible in the app until the settings button closes
+/// the panel again.
+private struct SettingsPanel: View {
+    @Binding var pinned: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack {
+                Text("Appearance")
+                Spacer()
+                ThemeToggle()
+            }
+            Divider()
+                .frame(height: 20)
+            HStack {
+                Text("Float above other apps")
+                Spacer()
+                PinButton(pinned: $pinned)
+            }
+        }
+        .font(.inter(13))
+        .foregroundStyle(Theme.ink)
+        .padding(.horizontal, 12)
+        .frame(height: 44)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.hover))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
+    }
+}
+
+/// The supplied settings mark, kept as vector paths so it stays crisp at the
+/// compact header size without adding an image-asset pipeline.
+private struct SettingsGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24
+        let x = rect.midX - 12 * scale
+        let y = rect.midY - 12 * scale
+        func point(_ horizontal: CGFloat, _ vertical: CGFloat) -> CGPoint {
+            CGPoint(x: horizontal * scale + x, y: vertical * scale + y)
+        }
+
+        var path = Path()
+        path.move(to: point(10.53, 3.827))
+        path.addLine(to: point(18.472, 6.640))
+        path.addCurve(to: point(20, 9.255), control1: point(19.416, 7.171), control2: point(20, 8.171))
+        path.addLine(to: point(20, 14.745))
+        path.addCurve(to: point(18.472, 17.360), control1: point(20, 15.829), control2: point(19.416, 16.829))
+        path.addLine(to: point(13.472, 20.173))
+        path.addCurve(to: point(10.529, 20.173), control1: point(12.558, 20.686), control2: point(11.443, 20.686))
+        path.addLine(to: point(5.529, 17.360))
+        path.addCurve(to: point(4, 14.746), control1: point(4.585, 16.829), control2: point(4, 15.830))
+        path.addLine(to: point(4, 9.254))
+        path.addCurve(to: point(5.53, 6.640), control1: point(4, 8.171), control2: point(4.585, 7.171))
+        path.closeSubpath()
+        path.addEllipse(in: CGRect(x: x + 9 * scale, y: y + 9 * scale, width: 6 * scale, height: 6 * scale))
+        return path
     }
 }

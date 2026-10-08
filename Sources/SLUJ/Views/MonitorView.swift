@@ -70,11 +70,6 @@ struct MonitorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if showsSettings {
-                SettingsPanel(pinned: $pinned)
-                    .padding(.bottom, Dimensions.sectionGap)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
             stat
             Spacer().frame(height: Dimensions.sectionGap)
             ProcessChart(segments: segments, emptyMessage: showsValues ? "No processes to display" : "Measuring…")
@@ -116,6 +111,15 @@ struct MonitorView: View {
             SettingsButton(isPresented: $showsSettings)
         }
         .frame(height: Dimensions.headerHeight)
+        .overlay(alignment: .topTrailing) {
+            if showsSettings {
+                SettingsDropdown(pinned: $pinned)
+                    .offset(y: Dimensions.headerHeight + 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .zIndex(1)
+            }
+        }
+        .zIndex(showsSettings ? 1 : 0)
     }
 
     private var stat: some View {
@@ -286,10 +290,15 @@ private struct SettingsButton: View {
         Button {
             isPresented.toggle()
         } label: {
-            SettingsGlyph()
-                .stroke(Theme.ink, style: StrokeStyle(lineWidth: 1.5, lineCap: .square, lineJoin: .round))
+            Image(nsImage: SettingsIcon.image)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
                 .frame(width: 16, height: 16)
-                .frame(width: 20, height: Dimensions.headerHeight)
+                .foregroundStyle(Theme.ink)
+                .frame(width: Dimensions.compactControlHeight, height: Dimensions.compactControlHeight)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.background))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -299,60 +308,31 @@ private struct SettingsButton: View {
     }
 }
 
-/// The two settings stay visible in the app until the settings button closes
-/// the panel again.
-private struct SettingsPanel: View {
+/// A compact, in-window dropdown with the two settings represented only by
+/// their familiar icons; hover help and accessibility labels provide names.
+private struct SettingsDropdown: View {
     @Binding var pinned: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            HStack {
-                Text("Appearance")
-                Spacer()
-                ThemeToggle()
-            }
-            Divider()
-                .frame(height: 20)
-            HStack {
-                Text("Float above other apps")
-                Spacer()
-                PinButton(pinned: $pinned)
-            }
+        VStack(spacing: 4) {
+            ThemeToggle()
+            PinButton(pinned: $pinned)
         }
-        .font(.inter(13))
-        .foregroundStyle(Theme.ink)
-        .padding(.horizontal, 12)
-        .frame(height: 44)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.hover))
+        .padding(6)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.background))
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
     }
 }
 
-/// The supplied settings mark, kept as vector paths so it stays crisp at the
-/// compact header size without adding an image-asset pipeline.
-private struct SettingsGlyph: Shape {
-    func path(in rect: CGRect) -> Path {
-        let scale = min(rect.width, rect.height) / 24
-        let x = rect.midX - 12 * scale
-        let y = rect.midY - 12 * scale
-        func point(_ horizontal: CGFloat, _ vertical: CGFloat) -> CGPoint {
-            CGPoint(x: horizontal * scale + x, y: vertical * scale + y)
-        }
-
-        var path = Path()
-        path.move(to: point(10.53, 3.827))
-        path.addLine(to: point(18.472, 6.640))
-        path.addCurve(to: point(20, 9.255), control1: point(19.416, 7.171), control2: point(20, 8.171))
-        path.addLine(to: point(20, 14.745))
-        path.addCurve(to: point(18.472, 17.360), control1: point(20, 15.829), control2: point(19.416, 16.829))
-        path.addLine(to: point(13.472, 20.173))
-        path.addCurve(to: point(10.529, 20.173), control1: point(12.558, 20.686), control2: point(11.443, 20.686))
-        path.addLine(to: point(5.529, 17.360))
-        path.addCurve(to: point(4, 14.746), control1: point(4.585, 16.829), control2: point(4, 15.830))
-        path.addLine(to: point(4, 9.254))
-        path.addCurve(to: point(5.53, 6.640), control1: point(4, 8.171), control2: point(4.585, 7.171))
-        path.closeSubpath()
-        path.addEllipse(in: CGRect(x: x + 9 * scale, y: y + 9 * scale, width: 6 * scale, height: 6 * scale))
-        return path
-    }
+/// The supplied settings mark, embedded as its original SVG so the button
+/// doesn't reinterpret or distort the icon's path data.
+private enum SettingsIcon {
+    static let image: NSImage = {
+        let svg = #"""
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><path d="M10.53 3.82729C11.4432 3.31361 12.5583 3.31361 13.4715 3.82729L18.4716 6.63977C19.4162 7.17112 20.0008 8.17067 20.0008 9.2545L20.0008 14.7454C20.0008 15.8292 19.4162 16.8288 18.4715 17.3601L13.4715 20.1726C12.5583 20.6863 11.4432 20.6863 10.53 20.1726L5.53008 17.3604C4.58539 16.8291 4.00077 15.8295 4.00077 14.7456L4.00077 9.25448C4.00077 8.17065 4.58536 7.17109 5.53 6.63974L10.53 3.82729Z" stroke="black" stroke-width="2" stroke-linecap="square" stroke-linejoin="round"/><path d="M18.4708 6.63975L13.4708 3.82728C12.5575 3.3136 11.4425 3.3136 10.5292 3.82728L5.52924 6.63973C4.58459 7.17108 4 8.17064 4 9.25447V14.7456C4 15.8295 4.58463 16.8291 5.52931 17.3604L10.5293 20.1726C11.4425 20.6863 12.5575 20.6863 13.4707 20.1726L18.4708 17.3601C19.4154 16.8288 20 15.8292 20 14.7454V9.25449C20 8.17066 19.4154 7.17111 18.4708 6.63975Z" stroke="black" stroke-width="2" stroke-linecap="square" stroke-linejoin="round"/><path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="black" stroke-width="2" stroke-linecap="square" stroke-linejoin="round"/></svg>
+        """#
+        let image = NSImage(data: Data(svg.utf8)) ?? NSImage(size: NSSize(width: 24, height: 24))
+        image.isTemplate = true
+        return image
+    }()
 }

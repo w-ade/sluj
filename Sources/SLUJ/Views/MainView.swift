@@ -102,6 +102,7 @@ struct WindowObserver: NSViewRepresentable {
             guard let window else { return }
 
             window.level = pinned ? .floating : .normal
+            window.backgroundColor = NSColor(light: 0xFFFFFF, dark: 0x171717)
             window.isMovableByWindowBackground = true
 
             let center = NotificationCenter.default
